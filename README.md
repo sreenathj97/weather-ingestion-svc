@@ -1,1 +1,1 @@
-This is a weather observability project
+This is a weather observability app
