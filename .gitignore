@@ -1,7 +1,0 @@
-# Go build files
-/weather-app
-*.exe
-*.out
-
-# VS Code
-.vscode/
