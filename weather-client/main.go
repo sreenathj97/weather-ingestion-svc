@@ -1,8 +1,9 @@
 package main
 
 import (
-	"fmt"
+	"log/slog"
 	"net/http"
+	"time"
 
 	"weather-client/internal/pkg/constants"
 	"weather-client/internal/pkg/logger"
@@ -12,19 +13,32 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
+const (
+	pollInterval = 5 * time.Second
+)
+
 func main() {
 	logger.Init()
-	prometheus.MustRegister(observability.TemperatureGauge)
-	prometheus.MustRegister(observability.WindspeedGauge)
-	prometheus.MustRegister(observability.APIUpGauge)
 
-	go observability.StartWeatherPolling()
+	prometheus.MustRegister(
+		observability.TemperatureGauge,
+		observability.WindspeedGauge,
+	)
 
-	http.Handle("/metrics", promhttp.Handler())
+	observabilityClient := observability.NewObservabilityClient(constants.WeatherAPIURL, http.DefaultClient)
+	go observabilityClient.WeatherMetricsWorkflow(pollInterval)
 
-	fmt.Println("Metrics available at http://localhost" + constants.ServerPort + "/metrics")
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.Handler())
 
-	if err := http.ListenAndServe(constants.ServerPort, nil); err != nil {
-		fmt.Println("Server failed:", err)
+	httpServer := &http.Server{
+		Addr:    constants.ServerPort,
+		Handler: mux,
+	}
+
+	slog.Info("starting metrics server", "addr", httpServer.Addr)
+
+	if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		slog.Error("metrics server stopped unexpectedly", "error", err)
 	}
 }

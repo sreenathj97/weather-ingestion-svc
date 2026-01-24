@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"time"
-	"weather-client/internal/pkg/constants"
+
 	"weather-client/internal/pkg/logger"
 	"weather-client/internal/pkg/models"
 
@@ -13,85 +13,92 @@ import (
 )
 
 var (
-	TemperatureGauge = prometheus.NewGauge(
-		prometheus.GaugeOpts{
-			Name: "weather_temperature_celsius",
-			Help: "Current temperature in Celsius",
-		},
-	)
+	TemperatureGauge = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "weather_temperature_celsius",
+		Help: "Current temperature in Celsius",
+	})
 
-	WindspeedGauge = prometheus.NewGauge(
-		prometheus.GaugeOpts{
-			Name: "weather_windspeed_kmh",
-			Help: "Current wind speed in km/h",
-		},
-	)
-
-	APIUpGauge = prometheus.NewGauge(
-		prometheus.GaugeOpts{
-			Name: "weather_api_up",
-			Help: "API status (1 = up, 0 = down)",
-		},
-	)
+	WindspeedGauge = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "weather_windspeed_kmh",
+		Help: "Current wind speed in km/h",
+	})
 )
 
-// httpGet is a variable so it can be mocked in tests
-var httpGet = http.Get
+type ObservabilityInterface interface {
+	WeatherMetricsWorkflow(interval time.Duration)
+	GetWeatherMetrics() (*models.WeatherResponse, error)
+}
 
-// FetchWeatherAPIResponse calls the weather API and parses response
-func FetchWeatherAPIResponse() (*models.WeatherResponse, error) {
-	resp, err := httpGet(constants.WeatherAPIURL)
+type httpGetter interface {
+	Get(url string) (*http.Response, error)
+}
+
+type observabilityClient struct {
+	weatherApiUrl string
+	http          httpGetter
+}
+
+func NewObservabilityClient(weatherApiUrl string, httpClient httpGetter) ObservabilityInterface {
+	if httpClient == nil {
+		httpClient = http.DefaultClient
+	}
+	return &observabilityClient{
+		weatherApiUrl: weatherApiUrl,
+		http:          httpClient,
+	}
+}
+
+func (c *observabilityClient) GetWeatherMetrics() (*models.WeatherResponse, error) {
+
+	weatherApiResponse, err := c.http.Get(c.weatherApiUrl)
 	if err != nil {
-		return nil, fmt.Errorf("api call failed: %v", err)
+		logger.Logger.Warn("weather api request failed", "error", err)
+		return nil, fmt.Errorf("api call failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer weatherApiResponse.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("non-200 response: %s", resp.Status)
+	if weatherApiResponse.StatusCode != http.StatusOK {
+		logger.Logger.Warn(
+			"weather api returned non-200 response",
+			"status", weatherApiResponse.Status,
+		)
+		return nil, fmt.Errorf("non-200 response: %s", weatherApiResponse.Status)
 	}
 
-	var weather models.WeatherResponse
-	if err := json.NewDecoder(resp.Body).Decode(&weather); err != nil {
-		return nil, fmt.Errorf("json decode failed: %v", err)
+	var weatherDetails models.WeatherResponse
+	if err := json.NewDecoder(weatherApiResponse.Body).Decode(&weatherDetails); err != nil {
+		logger.Logger.Warn("failed to decode weather api response", "error", err)
+		return nil, fmt.Errorf("json decode failed: %w", err)
 	}
 
-	return &weather, nil
+	return &weatherDetails, nil
 }
 
-// ScrapeWeatherValues updates Prometheus metrics
-func ScrapeWeatherValues(weather *models.WeatherResponse) {
-	TemperatureGauge.Set(weather.CurrentWeather.Temperature)
-	WindspeedGauge.Set(weather.CurrentWeather.Windspeed)
-	APIUpGauge.Set(1)
-}
-
-// RunWeatherOnce executes one polling cycle (TESTABLE)
-func RunWeatherOnce() error {
-	weather, err := FetchWeatherAPIResponse()
-	if err != nil {
-		APIUpGauge.Set(0)
-		return err
+func EmitWeatherMetrics(weatherMetrics *models.WeatherResponse) {
+	if weatherMetrics == nil {
+		logger.Logger.Warn("skipping metric emission: nil weather response")
+		return
 	}
 
-	ScrapeWeatherValues(weather)
-	return nil
+	TemperatureGauge.Set(weatherMetrics.CurrentWeather.Temperature)
+	WindspeedGauge.Set(weatherMetrics.CurrentWeather.Windspeed)
+
+	logger.Logger.Debug(
+		"weather metrics emitted",
+		"temperature_c", weatherMetrics.CurrentWeather.Temperature,
+		"windspeed_kmh", weatherMetrics.CurrentWeather.Windspeed,
+	)
 }
 
-// StartWeatherPolling runs continuously (NOT unit tested)
-func StartWeatherPolling() {
+func (c *observabilityClient) WeatherMetricsWorkflow(interval time.Duration) {
+
+	logger.Logger.Info("weather metrics workflow started", "interval", interval)
+
 	for {
-		if err := RunWeatherOnce(); err != nil {
-			logger.Logger.Error(
-				"Weather fetch failed",
-				"error", err,
-			)
-
-		} else {
-			logger.Logger.Info(
-				"Weather updated successfully",
-			)
-
+		weatherMetrics, err := c.GetWeatherMetrics()
+		if err == nil {
+			EmitWeatherMetrics(weatherMetrics)
 		}
-		time.Sleep(5 * time.Second)
+		time.Sleep(interval)
 	}
 }
