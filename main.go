@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"weather-ingestion-svc/internal/pkg/constants"
+	"weather-ingestion-svc/internal/pkg/logger"
 	"weather-ingestion-svc/internal/pkg/observability"
 	"weather-ingestion-svc/internal/pkg/weather"
 
@@ -13,6 +14,7 @@ import (
 )
 
 func main() {
+	logger.Init()
 	prometheus.MustRegister(observability.TemperatureGauge)
 	prometheus.MustRegister(observability.WindspeedGauge)
 	prometheus.MustRegister(observability.APIUpGauge)

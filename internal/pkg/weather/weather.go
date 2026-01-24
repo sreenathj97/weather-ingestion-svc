@@ -7,13 +7,17 @@ import (
 	"time"
 
 	"weather-ingestion-svc/internal/pkg/constants"
+	"weather-ingestion-svc/internal/pkg/logger"
 	"weather-ingestion-svc/internal/pkg/models"
 	"weather-ingestion-svc/internal/pkg/observability"
 )
 
-// FetchWeatherAPIResponse handles API call
+// httpGet is a variable so it can be mocked in tests
+var httpGet = http.Get
+
+// FetchWeatherAPIResponse calls the weather API and parses response
 func FetchWeatherAPIResponse() (*models.WeatherResponse, error) {
-	resp, err := http.Get(constants.WeatherAPIURL)
+	resp, err := httpGet(constants.WeatherAPIURL)
 	if err != nil {
 		return nil, fmt.Errorf("api call failed: %v", err)
 	}
@@ -38,25 +42,33 @@ func ScrapeWeatherValues(weather *models.WeatherResponse) {
 	observability.APIUpGauge.Set(1)
 }
 
-// StartWeatherPolling runs the loop
+// RunWeatherOnce executes one polling cycle (TESTABLE)
+func RunWeatherOnce() error {
+	weather, err := FetchWeatherAPIResponse()
+	if err != nil {
+		observability.APIUpGauge.Set(0)
+		return err
+	}
+
+	ScrapeWeatherValues(weather)
+	return nil
+}
+
+// StartWeatherPolling runs continuously (NOT unit tested)
 func StartWeatherPolling() {
 	for {
-		weather, err := FetchWeatherAPIResponse()
-		if err != nil {
-			observability.APIUpGauge.Set(0)
-			fmt.Println(fmt.Sprintf("Weather fetch error: %v", err))
-			time.Sleep(5 * time.Second)
-			continue
+		if err := RunWeatherOnce(); err != nil {
+			logger.Logger.Error(
+				"Weather fetch failed",
+				"error", err,
+			)
+
+		} else {
+			logger.Logger.Info(
+				"Weather updated successfully",
+			)
+
 		}
-
-		ScrapeWeatherValues(weather)
-
-		fmt.Println(fmt.Sprintf(
-			"Weather updated | Temp: %.1f°C | Wind: %.1f km/h",
-			weather.CurrentWeather.Temperature,
-			weather.CurrentWeather.Windspeed,
-		))
-
 		time.Sleep(5 * time.Second)
 	}
 }
