@@ -1,6 +1,16 @@
 package observability
 
-import "github.com/prometheus/client_golang/prometheus"
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"time"
+	"weather-client/internal/pkg/constants"
+	"weather-client/internal/pkg/logger"
+	"weather-client/internal/pkg/models"
+
+	"github.com/prometheus/client_golang/prometheus"
+)
 
 var (
 	TemperatureGauge = prometheus.NewGauge(
@@ -50,16 +60,16 @@ func FetchWeatherAPIResponse() (*models.WeatherResponse, error) {
 
 // ScrapeWeatherValues updates Prometheus metrics
 func ScrapeWeatherValues(weather *models.WeatherResponse) {
-	observability.TemperatureGauge.Set(weather.CurrentWeather.Temperature)
-	observability.WindspeedGauge.Set(weather.CurrentWeather.Windspeed)
-	observability.APIUpGauge.Set(1)
+	TemperatureGauge.Set(weather.CurrentWeather.Temperature)
+	WindspeedGauge.Set(weather.CurrentWeather.Windspeed)
+	APIUpGauge.Set(1)
 }
 
 // RunWeatherOnce executes one polling cycle (TESTABLE)
 func RunWeatherOnce() error {
 	weather, err := FetchWeatherAPIResponse()
 	if err != nil {
-		observability.APIUpGauge.Set(0)
+		APIUpGauge.Set(0)
 		return err
 	}
 
