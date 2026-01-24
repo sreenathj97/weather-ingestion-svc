@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"weather-client/internal/pkg/constants"
+	"weather-client/internal/pkg/logger"
 	"weather-client/internal/pkg/observability"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -17,6 +18,8 @@ const (
 )
 
 func main() {
+	logger.Init()
+
 	prometheus.MustRegister(
 		observability.TemperatureGauge,
 		observability.WindspeedGauge,
