@@ -1,4 +1,4 @@
-module weather-ingestion-svc
+module weather-client
 
 go 1.25.6
 

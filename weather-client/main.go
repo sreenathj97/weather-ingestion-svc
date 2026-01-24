@@ -4,10 +4,9 @@ import (
 	"fmt"
 	"net/http"
 
-	"weather-ingestion-svc/internal/pkg/constants"
-	"weather-ingestion-svc/internal/pkg/logger"
-	"weather-ingestion-svc/internal/pkg/observability"
-	"weather-ingestion-svc/internal/pkg/weather"
+	"weather-client/internal/pkg/constants"
+	"weather-client/internal/pkg/logger"
+	"weather-client/internal/pkg/observability"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
