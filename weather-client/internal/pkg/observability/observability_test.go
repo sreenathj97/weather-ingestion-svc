@@ -36,15 +36,15 @@ func TestGetWeatherMetricsSuccess(t *testing.T) {
 	}, nil)
 
 	client := NewObservabilityClient(apiURL, mockClient)
-	got, err := client.GetWeatherMetrics()
+	weatherApiResponse, err := client.GetWeatherMetrics()
 
 	require.NoError(t, err)
-	require.NotNil(t, got)
-	require.Equal(t, 21.5, got.CurrentWeather.Temperature)
-	require.Equal(t, 9.2, got.CurrentWeather.Windspeed)
-	require.Equal(t, 120.0, got.CurrentWeather.WindDirection)
-	require.Equal(t, 1, got.CurrentWeather.IsDay)
-	require.Equal(t, 3, got.CurrentWeather.WeatherCode)
+	require.NotNil(t, weatherApiResponse)
+	require.Equal(t, 21.5, weatherApiResponse.CurrentWeather.Temperature)
+	require.Equal(t, 9.2, weatherApiResponse.CurrentWeather.Windspeed)
+	require.Equal(t, 120.0, weatherApiResponse.CurrentWeather.WindDirection)
+	require.Equal(t, 1, weatherApiResponse.CurrentWeather.IsDay)
+	require.Equal(t, 3, weatherApiResponse.CurrentWeather.WeatherCode)
 
 	mockClient.AssertExpectations(t)
 }
@@ -58,10 +58,10 @@ func TestGetWeatherMetricsHTTPError(t *testing.T) {
 	mockClient.On("Get", apiURL).Return((*http.Response)(nil), errors.New("network down"))
 
 	client := NewObservabilityClient(apiURL, mockClient)
-	got, err := client.GetWeatherMetrics()
+	weatherApiResponse, err := client.GetWeatherMetrics()
 
 	require.Error(t, err)
-	require.Nil(t, got)
+	require.Nil(t, weatherApiResponse)
 	require.Contains(t, err.Error(), "api call failed")
 
 	mockClient.AssertExpectations(t)
@@ -81,10 +81,10 @@ func TestGetWeatherMetricsNon200(t *testing.T) {
 	}, nil)
 
 	client := NewObservabilityClient(apiURL, mockClient)
-	got, err := client.GetWeatherMetrics()
+	weatherApiResponse, err := client.GetWeatherMetrics()
 
 	require.Error(t, err)
-	require.Nil(t, got)
+	require.Nil(t, weatherApiResponse)
 	require.Contains(t, err.Error(), "non-200 response")
 
 	mockClient.AssertExpectations(t)
@@ -104,10 +104,10 @@ func TestGetWeatherMetricsInvalidJSON(t *testing.T) {
 	}, nil)
 
 	client := NewObservabilityClient(apiURL, mockClient)
-	got, err := client.GetWeatherMetrics()
+	weatherApiResponse, err := client.GetWeatherMetrics()
 
 	require.Error(t, err)
-	require.Nil(t, got)
+	require.Nil(t, weatherApiResponse)
 	require.Contains(t, err.Error(), "json decode failed")
 
 	mockClient.AssertExpectations(t)

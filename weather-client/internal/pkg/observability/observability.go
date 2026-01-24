@@ -3,10 +3,10 @@ package observability
 import (
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"time"
 
+	"weather-client/internal/pkg/logger"
 	"weather-client/internal/pkg/models"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -22,8 +22,6 @@ var (
 		Name: "weather_windspeed_kmh",
 		Help: "Current wind speed in km/h",
 	})
-
-	logger = slog.Default()
 )
 
 type ObservabilityInterface interface {
@@ -54,13 +52,13 @@ func (c *observabilityClient) GetWeatherMetrics() (*models.WeatherResponse, erro
 
 	weatherApiResponse, err := c.http.Get(c.weatherApiUrl)
 	if err != nil {
-		logger.Warn("weather api request failed", "error", err)
+		logger.Logger.Warn("weather api request failed", "error", err)
 		return nil, fmt.Errorf("api call failed: %w", err)
 	}
 	defer weatherApiResponse.Body.Close()
 
 	if weatherApiResponse.StatusCode != http.StatusOK {
-		logger.Warn(
+		logger.Logger.Warn(
 			"weather api returned non-200 response",
 			"status", weatherApiResponse.Status,
 		)
@@ -69,7 +67,7 @@ func (c *observabilityClient) GetWeatherMetrics() (*models.WeatherResponse, erro
 
 	var weatherDetails models.WeatherResponse
 	if err := json.NewDecoder(weatherApiResponse.Body).Decode(&weatherDetails); err != nil {
-		logger.Warn("failed to decode weather api response", "error", err)
+		logger.Logger.Warn("failed to decode weather api response", "error", err)
 		return nil, fmt.Errorf("json decode failed: %w", err)
 	}
 
@@ -78,14 +76,14 @@ func (c *observabilityClient) GetWeatherMetrics() (*models.WeatherResponse, erro
 
 func EmitWeatherMetrics(weatherMetrics *models.WeatherResponse) {
 	if weatherMetrics == nil {
-		logger.Warn("skipping metric emission: nil weather response")
+		logger.Logger.Warn("skipping metric emission: nil weather response")
 		return
 	}
 
 	TemperatureGauge.Set(weatherMetrics.CurrentWeather.Temperature)
 	WindspeedGauge.Set(weatherMetrics.CurrentWeather.Windspeed)
 
-	logger.Debug(
+	logger.Logger.Debug(
 		"weather metrics emitted",
 		"temperature_c", weatherMetrics.CurrentWeather.Temperature,
 		"windspeed_kmh", weatherMetrics.CurrentWeather.Windspeed,
@@ -94,7 +92,7 @@ func EmitWeatherMetrics(weatherMetrics *models.WeatherResponse) {
 
 func (c *observabilityClient) WeatherMetricsWorkflow(interval time.Duration) {
 
-	logger.Info("weather metrics workflow started", "interval", interval)
+	logger.Logger.Info("weather metrics workflow started", "interval", interval)
 
 	for {
 		weatherMetrics, err := c.GetWeatherMetrics()

@@ -22,8 +22,8 @@ func main() {
 		observability.WindspeedGauge,
 	)
 
-	client := observability.NewObservabilityClient(constants.WeatherAPIURL, nil)
-	go client.WeatherMetricsWorkflow(pollInterval)
+	observabilityClient := observability.NewObservabilityClient(constants.WeatherAPIURL, http.DefaultClient)
+	go observabilityClient.WeatherMetricsWorkflow(pollInterval)
 
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
