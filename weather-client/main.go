@@ -19,7 +19,7 @@ func main() {
 	prometheus.MustRegister(observability.WindspeedGauge)
 	prometheus.MustRegister(observability.APIUpGauge)
 
-	go weather.StartWeatherPolling()
+	go observability.StartWeatherPolling()
 
 	http.Handle("/metrics", promhttp.Handler())
 

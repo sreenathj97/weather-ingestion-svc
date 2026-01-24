@@ -1,15 +1,28 @@
-package weather
+package observability
 
-import (
-	"encoding/json"
-	"fmt"
-	"net/http"
-	"time"
+import "github.com/prometheus/client_golang/prometheus"
 
-	"weather-ingestion-svc/internal/pkg/constants"
-	"weather-ingestion-svc/internal/pkg/logger"
-	"weather-ingestion-svc/internal/pkg/models"
-	"weather-ingestion-svc/internal/pkg/observability"
+var (
+	TemperatureGauge = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "weather_temperature_celsius",
+			Help: "Current temperature in Celsius",
+		},
+	)
+
+	WindspeedGauge = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "weather_windspeed_kmh",
+			Help: "Current wind speed in km/h",
+		},
+	)
+
+	APIUpGauge = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "weather_api_up",
+			Help: "API status (1 = up, 0 = down)",
+		},
+	)
 )
 
 // httpGet is a variable so it can be mocked in tests
