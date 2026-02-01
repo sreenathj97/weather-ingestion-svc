@@ -3,7 +3,7 @@ name: Build and Push Docker Image
 on:
   push:
     branches:
-      - main
+      - "aj/workflow"
 
 jobs:
   docker:
@@ -29,3 +29,25 @@ jobs:
           file: ./weather-client/Dockerfile
           push: true
           tags: sreenathjayakrishnan/weather-client:latest
+
+  deploy-minikube:
+    runs-on: self-hosted
+    needs: docker
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Ensure Minikube is running
+        run: |
+          if ! minikube status >/dev/null 2>&1; then
+            minikube start
+          fi
+
+      - name: Create namespace (if needed)
+        run: kubectl create namespace weather-ingestion-svc --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy with Helm
+        run: |
+          helm upgrade --install weather-client ./helm/weather-client \
+            --namespace weather-ingestion-svc

@@ -1,0 +1,11 @@
+replicaCount: 1
+
+image:
+  repository: sreenathjayakrishnan/weather-client
+  tag: latest
+  pullPolicy: Always
+
+service:
+  type: ClusterIP
+  port: 2112
+  targetPort: 2112
