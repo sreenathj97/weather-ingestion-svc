@@ -3,6 +3,8 @@ module weather-client
 go 1.25.6
 
 require (
+	github.com/google/uuid v1.6.0
+	github.com/lib/pq v1.11.2
 	github.com/prometheus/client_golang v1.23.2
 	github.com/stretchr/testify v1.11.1
 )
