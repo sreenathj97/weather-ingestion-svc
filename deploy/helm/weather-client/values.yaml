@@ -1,0 +1,8 @@
+image:
+  repository: sreenathjayakrishnan/weather-client
+  tag: latest
+
+service:
+  port: 2112
+
+replicaCount: 1

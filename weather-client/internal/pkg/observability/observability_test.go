@@ -1,15 +1,21 @@
 package observability
 
 import (
-	"errors"
+	"context"
 	"io"
 	"net/http"
 	"strings"
 	"testing"
+	"time"
+
+	"weather-client/internal/pkg/models"
 
 	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 )
+
+//
+// ---------- MOCK HTTP CLIENT ----------
+//
 
 type mockHTTPClient struct {
 	mock.Mock
@@ -21,94 +27,128 @@ func (m *mockHTTPClient) Get(url string) (*http.Response, error) {
 	return resp, args.Error(1)
 }
 
-func TestGetWeatherMetricsSuccess(t *testing.T) {
-	t.Parallel()
+//
+// ---------- MOCK REPOSITORY ----------
+//
 
-	const apiURL = "https://example.com/weather"
-	body := `{"current_weather":{"temperature":21.5,"windspeed":9.2,"winddirection":120,"is_day":1,"weathercode":3}}`
-
-	mockClient := &mockHTTPClient{}
-	mockClient.On("Get", apiURL).Return(&http.Response{
-		StatusCode: http.StatusOK,
-		Status:     "200 OK",
-		Body:       io.NopCloser(strings.NewReader(body)),
-		Header:     make(http.Header),
-	}, nil)
-
-	client := NewObservabilityClient(apiURL, mockClient)
-	weatherApiResponse, err := client.GetWeatherMetrics()
-
-	require.NoError(t, err)
-	require.NotNil(t, weatherApiResponse)
-	require.Equal(t, 21.5, weatherApiResponse.CurrentWeather.Temperature)
-	require.Equal(t, 9.2, weatherApiResponse.CurrentWeather.Windspeed)
-	require.Equal(t, 120.0, weatherApiResponse.CurrentWeather.WindDirection)
-	require.Equal(t, 1, weatherApiResponse.CurrentWeather.IsDay)
-	require.Equal(t, 3, weatherApiResponse.CurrentWeather.WeatherCode)
-
-	mockClient.AssertExpectations(t)
+type mockRepo struct {
+	mock.Mock
 }
 
-func TestGetWeatherMetricsHTTPError(t *testing.T) {
-	t.Parallel()
-
-	const apiURL = "https://example.com/weather"
-
-	mockClient := &mockHTTPClient{}
-	mockClient.On("Get", apiURL).Return((*http.Response)(nil), errors.New("network down"))
-
-	client := NewObservabilityClient(apiURL, mockClient)
-	weatherApiResponse, err := client.GetWeatherMetrics()
-
-	require.Error(t, err)
-	require.Nil(t, weatherApiResponse)
-	require.Contains(t, err.Error(), "api call failed")
-
-	mockClient.AssertExpectations(t)
+func (m *mockRepo) GetAllCities(ctx context.Context) ([]models.City, error) {
+	args := m.Called(ctx)
+	cities, _ := args.Get(0).([]models.City)
+	return cities, args.Error(1)
 }
 
-func TestGetWeatherMetricsNon200(t *testing.T) {
+//
+// ---------- TEST SUCCESS CASE ----------
+//
+
+func TestWeatherWorkflowSuccess(t *testing.T) {
 	t.Parallel()
 
-	const apiURL = "https://example.com/weather"
+	apiBaseURL := "https://example.com/weather"
 
-	mockClient := &mockHTTPClient{}
-	mockClient.On("Get", apiURL).Return(&http.Response{
-		StatusCode: http.StatusInternalServerError,
-		Status:     "500 Internal Server Error",
-		Body:       io.NopCloser(strings.NewReader(`{}`)),
-		Header:     make(http.Header),
-	}, nil)
+	mockClient := new(mockHTTPClient)
+	mockRepository := new(mockRepo)
 
-	client := NewObservabilityClient(apiURL, mockClient)
-	weatherApiResponse, err := client.GetWeatherMetrics()
+	testCities := []models.City{
+		{
+			CityName:  "TestCity",
+			Latitude:  10.0,
+			Longitude: 20.0,
+		},
+	}
 
-	require.Error(t, err)
-	require.Nil(t, weatherApiResponse)
-	require.Contains(t, err.Error(), "non-200 response")
+	mockRepository.
+		On("GetAllCities", mock.Anything).
+		Return(testCities, nil)
+
+	body := `{"current_weather":{"temperature":25.5,"windspeed":5.2}}`
+
+	mockClient.
+		On("Get", mock.Anything).
+		Return(&http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(body)),
+			Header:     make(http.Header),
+		}, nil)
+
+	client := NewObservabilityClient(apiBaseURL, mockClient, mockRepository)
+
+	// Run only one iteration safely
+	go client.WeatherMetricsWorkflow(100 * time.Millisecond)
+
+	time.Sleep(200 * time.Millisecond)
 
 	mockClient.AssertExpectations(t)
+	mockRepository.AssertExpectations(t)
 }
 
-func TestGetWeatherMetricsInvalidJSON(t *testing.T) {
+//
+// ---------- TEST DB ERROR ----------
+//
+
+func TestWeatherWorkflowDBError(t *testing.T) {
 	t.Parallel()
 
-	const apiURL = "https://example.com/weather"
+	apiBaseURL := "https://example.com/weather"
 
-	mockClient := &mockHTTPClient{}
-	mockClient.On("Get", apiURL).Return(&http.Response{
-		StatusCode: http.StatusOK,
-		Status:     "200 OK",
-		Body:       io.NopCloser(strings.NewReader("{")),
-		Header:     make(http.Header),
-	}, nil)
+	mockClient := new(mockHTTPClient)
+	mockRepository := new(mockRepo)
 
-	client := NewObservabilityClient(apiURL, mockClient)
-	weatherApiResponse, err := client.GetWeatherMetrics()
+	mockRepository.
+		On("GetAllCities", mock.Anything).
+		Return(nil, context.DeadlineExceeded)
 
-	require.Error(t, err)
-	require.Nil(t, weatherApiResponse)
-	require.Contains(t, err.Error(), "json decode failed")
+	client := NewObservabilityClient(apiBaseURL, mockClient, mockRepository)
+
+	go client.WeatherMetricsWorkflow(100 * time.Millisecond)
+
+	time.Sleep(200 * time.Millisecond)
+
+	mockRepository.AssertExpectations(t)
+}
+
+//
+// ---------- TEST NON-200 RESPONSE ----------
+//
+
+func TestWeatherWorkflowNon200(t *testing.T) {
+	t.Parallel()
+
+	apiBaseURL := "https://example.com/weather"
+
+	mockClient := new(mockHTTPClient)
+	mockRepository := new(mockRepo)
+
+	testCities := []models.City{
+		{
+			CityName:  "TestCity",
+			Latitude:  10.0,
+			Longitude: 20.0,
+		},
+	}
+
+	mockRepository.
+		On("GetAllCities", mock.Anything).
+		Return(testCities, nil)
+
+	mockClient.
+		On("Get", mock.Anything).
+		Return(&http.Response{
+			StatusCode: http.StatusInternalServerError,
+			Body:       io.NopCloser(strings.NewReader(`{}`)),
+			Header:     make(http.Header),
+		}, nil)
+
+	client := NewObservabilityClient(apiBaseURL, mockClient, mockRepository)
+
+	go client.WeatherMetricsWorkflow(100 * time.Millisecond)
+
+	time.Sleep(200 * time.Millisecond)
 
 	mockClient.AssertExpectations(t)
+	mockRepository.AssertExpectations(t)
 }

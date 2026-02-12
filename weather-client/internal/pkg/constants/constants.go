@@ -1,6 +1,12 @@
 package constants
 
 const (
-	WeatherAPIURL = "https://api.open-meteo.com/v1/forecast?latitude=52.52&longitude=13.41&current_weather=true"
-	ServerPort    = ":2112"
+	// Prometheus server port
+	ServerPort = ":2112"
+
+	// Weather API base (without lat/long)
+	WeatherAPIBaseURL = "https://api.open-meteo.com/v1/forecast"
+
+	// PostgreSQL connection string
+	DatabaseURL = "postgres://weather_user:weather123@localhost:5433/weather_db?sslmode=disable"
 )
